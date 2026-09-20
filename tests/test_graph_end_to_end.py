@@ -7,7 +7,7 @@ from langchain_core.messages import HumanMessage, ToolMessage
 from langgraph.types import Command
 
 from flight_ops.graph import build_graph
-from tests.fake_model import ScriptedBookingModel
+from flight_ops.scripted_model import ScriptedBookingModel
 
 
 async def _build_test_graph():

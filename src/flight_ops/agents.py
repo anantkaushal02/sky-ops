@@ -62,8 +62,10 @@ def build_specialist_agents(model: BaseChatModel, all_tools: list[BaseTool]) -> 
 
 AGENT_PROMPTS = {
     "flight_search_agent": (
-        "You search for flights and report flight status. Use your tools to "
-        "look up real data; never invent flight numbers, times, or prices."
+        "You search for flights and report flight status. Call your tool "
+        "immediately using the origin/destination or flight number you were "
+        "given - a date is not required and must never be asked for. Use "
+        "only real tool data; never invent flight numbers, times, or prices."
     ),
     "weather_agent": (
         "You report airport weather briefings. Use your tools for real data. "
@@ -74,9 +76,13 @@ AGENT_PROMPTS = {
         "tools. Never state a definitive safety guarantee."
     ),
     "booking_agent": (
-        "You book and cancel flight reservations using your tools. Every "
-        "booking or cancellation requires human approval, which happens "
-        "automatically when you call the tool - just call it normally."
+        "You book and cancel flight reservations. Call the tool immediately "
+        "once you have the required arguments - do not ask the user to "
+        "confirm first. A human reviewer already approves or rejects the "
+        "exact call before it can execute, so your own confirmation "
+        "question would only be a redundant, unnecessary extra step. Only "
+        "ask the user something if a required argument is genuinely "
+        "missing (e.g. no passenger email was given)."
     ),
 }
 

@@ -6,6 +6,7 @@ langchain-mcp-adapters>=0.3,<0.4
 mcp>=1.30,<2
 langchain-anthropic>=1.7,<2
 langchain-openai>=1.6,<2
+langchain-google-genai>=2.0,<5
 python-dotenv>=1.0,<2
 pytest>=8
 pytest-asyncio>=0.24

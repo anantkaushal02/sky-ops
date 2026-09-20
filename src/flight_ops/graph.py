@@ -19,6 +19,7 @@ from flight_ops.config import get_chat_model
 from flight_ops.guardrails.input_guardrails import screen_user_message
 from flight_ops.guardrails.output_guardrails import enforce_output_guardrails
 from flight_ops.state import CopilotState
+from flight_ops.text_utils import extract_text
 
 
 def _latest_human_text(messages: list) -> str:
@@ -45,7 +46,8 @@ def output_guardrail_node(state: CopilotState) -> dict:
     if state.get("blocked"):
         return {}
     last_message = state["messages"][-1]
-    checked_text = enforce_output_guardrails(str(last_message.content), state["messages"])
+    reply_text = extract_text(last_message.content)
+    checked_text = enforce_output_guardrails(reply_text, state["messages"])
     if checked_text == last_message.content:
         return {}
     return {"messages": [AIMessage(content=checked_text, id=last_message.id)]}

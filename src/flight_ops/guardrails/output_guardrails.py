@@ -10,6 +10,7 @@ Two independent checks:
 from langchain_core.messages import ToolMessage
 
 from flight_ops.guardrails import policies
+from flight_ops.text_utils import extract_text
 
 
 def add_safety_disclaimer(reply_text: str) -> str:
@@ -24,7 +25,7 @@ def collect_real_confirmation_numbers(messages: list) -> set[str]:
     for message in messages:
         if not isinstance(message, ToolMessage):
             continue
-        content = str(message.content)
+        content = extract_text(message.content)
         real_numbers.update(policies.CONFIRMATION_NUMBER_PATTERN.findall(content))
     return real_numbers
 

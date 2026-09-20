@@ -1,8 +1,10 @@
-"""A deterministic fake chat model so the full graph can be exercised in
-tests without any real LLM API call.
+"""A deterministic stand-in chat model, used by both the offline demo
+(`flight_ops.demo`) and the test suite so the real graph - real MCP server
+subprocess, real supervisor routing, real HITL interrupt/resume flow - can
+run end to end with no LLM API call and no cost.
 
-It looks at which tools are currently bound (supervisor's handoff tools vs.
-a specialist's real tools) and which tool names already appear in the
+It looks at which tools are currently bound (the supervisor's handoff tools
+vs. a specialist's real tools) and which tool names already appear in the
 message history, then plays back one fixed step of a scripted plan at a
 time. Once nothing is left to call, it returns a final text answer.
 """
