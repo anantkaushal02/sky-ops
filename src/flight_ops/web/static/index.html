@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SkyOps Copilot</title>
+<style>
+  :root {
+    --bg: #0b1120;
+    --panel: #131c31;
+    --border: #24304a;
+    --text: #e6ebf5;
+    --muted: #8b98b3;
+    --accent: #4c8dff;
+    --user-bubble: #24304a;
+    --assistant-bubble: #16213a;
+    --warn: #f2b84b;
+    --danger: #e5637a;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f4f6fb;
+      --panel: #ffffff;
+      --border: #dde3ee;
+      --text: #16213a;
+      --muted: #5b6780;
+      --accent: #2f6fed;
+      --user-bubble: #e8edfb;
+      --assistant-bubble: #f0f2f7;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    display: flex;
+    justify-content: center;
+    min-height: 100vh;
+  }
+  main {
+    width: 100%;
+    max-width: 720px;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+  header {
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 { font-size: 18px; margin: 0; }
+  header p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+  #log {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .bubble {
+    max-width: 85%;
+    padding: 10px 14px;
+    border-radius: 14px;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    font-size: 14px;
+  }
+  .user { align-self: flex-end; background: var(--user-bubble); }
+  .assistant { align-self: flex-start; background: var(--assistant-bubble); border: 1px solid var(--border); }
+  .system { align-self: center; color: var(--muted); font-size: 12px; }
+  .error { align-self: center; color: var(--danger); font-size: 13px; }
+  .approval {
+    align-self: flex-start;
+    max-width: 90%;
+    border: 1px solid var(--warn);
+    border-radius: 14px;
+    padding: 12px 14px;
+    font-size: 14px;
+  }
+  .approval h3 { margin: 0 0 6px; font-size: 13px; color: var(--warn); }
+  .approval code { font-size: 12px; word-break: break-all; }
+  .approval-actions { margin-top: 10px; display: flex; gap: 8px; }
+  button {
+    border: none;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .approve { background: var(--accent); color: white; }
+  .reject { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  form {
+    display: flex;
+    gap: 8px;
+    padding: 16px;
+    border-top: 1px solid var(--border);
+  }
+  input[type="text"] {
+    flex: 1;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--text);
+    font-size: 14px;
+  }
+  input[type="text"]:disabled { opacity: 0.6; }
+  button[type="submit"] { background: var(--accent); color: white; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>SkyOps Copilot</h1>
+    <p>Supervised multi-agent flight-operations assistant. Bookings and cancellations require your approval.</p>
+  </header>
+  <div id="log"></div>
+  <form id="composer">
+    <input id="input" type="text" placeholder="Ask about flights, weather, maintenance, or book a flight..." autocomplete="off" />
+    <button type="submit">Send</button>
+  </form>
+</main>
+<script>
+  const log = document.getElementById("log");
+  const form = document.getElementById("composer");
+  const input = document.getElementById("input");
+  const sendButton = form.querySelector("button[type=submit]");
+
+  const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+  const socket = new WebSocket(`${protocol}//${location.host}/ws`);
+
+  function addBubble(role, text) {
+    const el = document.createElement("div");
+    el.className = "bubble " + role;
+    el.textContent = text;
+    log.appendChild(el);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function setInputEnabled(enabled) {
+    input.disabled = !enabled;
+    sendButton.disabled = !enabled;
+  }
+
+  function addApprovalCard(request) {
+    const card = document.createElement("div");
+    card.className = "approval";
+    const argsText = JSON.stringify(request.arguments, null, 2);
+    card.innerHTML = `
+      <h3>Human approval required</h3>
+      <div><strong>${request.tool_name}</strong> - ${request.tool_description}</div>
+      <code>${argsText}</code>
+      <div class="approval-actions">
+        <button class="approve">Approve</button>
+        <button class="reject">Reject</button>
+      </div>
+    `;
+    card.querySelector(".approve").onclick = () => respondToApproval(card, true);
+    card.querySelector(".reject").onclick = () => respondToApproval(card, false);
+    log.appendChild(card);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function respondToApproval(card, approved) {
+    card.querySelectorAll("button").forEach((b) => (b.disabled = true));
+    const reason = approved ? "" : prompt("Reason for rejecting (optional):") || "not specified";
+    socket.send(JSON.stringify({ type: "approval_response", approved, reason }));
+  }
+
+  socket.addEventListener("open", () => setInputEnabled(true));
+
+  socket.addEventListener("message", (event) => {
+    const message = JSON.parse(event.data);
+    if (message.type === "assistant_message") {
+      addBubble("assistant", message.text);
+      setInputEnabled(true);
+    } else if (message.type === "approval_request") {
+      addApprovalCard(message);
+    } else if (message.type === "error") {
+      addBubble("error", message.message);
+      setInputEnabled(true);
+    }
+  });
+
+  socket.addEventListener("close", () => {
+    addBubble("system", "Connection closed.");
+    setInputEnabled(false);
+  });
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const text = input.value.trim();
+    if (!text) return;
+    addBubble("user", text);
+    socket.send(JSON.stringify({ type: "user_message", text }));
+    input.value = "";
+    setInputEnabled(false);
+  });
+</script>
+</body>
+</html>

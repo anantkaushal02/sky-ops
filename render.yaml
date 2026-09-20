@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: sky-ops
+    env: docker
+    plan: free
+    healthCheckPath: /
+    envVars:
+      - key: FLIGHT_OPS_MODEL
+        value: google_genai:gemini-3.5-flash-lite
+      - key: GOOGLE_API_KEY
+        sync: false

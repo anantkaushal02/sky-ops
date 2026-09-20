@@ -110,11 +110,49 @@ final reply after the supervisor answers:
 
 ## Testing without a live LLM
 
-`tests/fake_model.py` implements `ScriptedBookingModel`, a minimal
+`flight_ops/scripted_model.py` implements `ScriptedBookingModel`, a minimal
 `BaseChatModel` that inspects which tools are currently bound (the
 supervisor's handoff tools vs. a specialist's real tools) and which tool
 names already appear in the message history, then emits the next scripted
 tool call or a final text answer. This is enough to drive the real graph -
 real MCP server subprocess, real supervisor routing, real `interrupt()`/
 `Command(resume=...)` flow - end to end with zero API calls and zero cost.
-See `tests/test_graph_end_to_end.py`.
+See `tests/test_graph_end_to_end.py` (direct graph calls) and
+`tests/test_web_chat.py` (the same flow through the WebSocket protocol).
+`flight_ops/demo.py` reuses it for a human-readable, non-interactive
+walkthrough (`python -m flight_ops.demo`).
+
+## The web layer
+
+`flight_ops/web/app.py` puts a FastAPI app in front of the exact same
+`build_graph()` used by the CLI - nothing about the graph, guardrails, or
+HITL logic changes for the web. Only the transport differs:
+
+- The CLI's blocking `input()`/`print()` become a JSON-over-WebSocket
+  protocol (message shapes documented at the top of `app.py`). Each
+  WebSocket connection gets its own `thread_id`, so each browser tab is an
+  independent conversation.
+- The CLI's `ask_human_approval()` terminal prompt becomes the
+  `approval_request` message type, which the browser renders as an
+  Approve/Reject card (`web/static/index.html`) instead of reading `y`/`N`
+  from stdin.
+- `graph.ainvoke(...)`'s `result["__interrupt__"]` and
+  `Command(resume=...)` work identically either way - the WebSocket
+  handler just relays the interrupt payload to the client and waits for an
+  `approval_response` message instead of a blocking `input()` call.
+
+Two things exist only at this layer, not in the graph itself, because they
+are deployment concerns rather than agent behavior:
+
+- **`rate_limit.DailyMessageLimiter`** - a process-wide, in-memory daily
+  cap checked before each turn is run. It exists because a small
+  free-tier LLM quota (e.g. 20 requests/day) can be exhausted by a single
+  visitor in one conversation, since each turn costs several real LLM
+  calls (supervisor routing, a specialist's tool call, handoff back, final
+  summary). It resets on process restart and isn't distributed across
+  multiple instances - adequate for a single small demo deployment, not a
+  real production rate limiter.
+- **Friendly error translation** (`friendly_error` in `app.py`) - a raw
+  provider error (e.g. Gemini's `429 RESOURCE_EXHAUSTED`) gets rewritten
+  into a plain-language message instead of leaking a stack trace to the
+  browser.
